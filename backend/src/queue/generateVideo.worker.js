@@ -16,10 +16,10 @@ function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function pollUntilDone(provider, providerJobId) {
+async function pollUntilDone(provider, providerJobId, taskType) {
 	const deadline = Date.now() + POLL_TIMEOUT_MS;
 	while (Date.now() < deadline) {
-		const result = await provider.getStatus(providerJobId);
+		const result = await provider.getStatus(providerJobId, taskType);
 		if (result.status !== 'processing') return result;
 		await sleep(POLL_INTERVAL_MS);
 	}
@@ -38,16 +38,17 @@ async function processVideoJob({ data }) {
 		await job.save();
 
 		const provider = getProvider(job.provider);
-		const { providerJobId } = await provider.createGeneration({
+		const { providerJobId, taskType } = await provider.createGeneration({
 			prompt: job.prompt,
 			imageUrl: job.imageUrl,
 			durationSeconds: job.durationSeconds,
 			resolution: job.resolution,
 		});
 		job.providerJobId = providerJobId;
+		job.providerTaskType = taskType;
 		await job.save();
 
-		const result = await pollUntilDone(provider, providerJobId);
+		const result = await pollUntilDone(provider, providerJobId, taskType);
 		if (result.status !== 'completed') {
 			throw new Error(result.error || 'Generation failed');
 		}

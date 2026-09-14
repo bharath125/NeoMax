@@ -15,7 +15,10 @@ export const config = {
 
 	videoProvider: process.env.VIDEO_PROVIDER || 'kling',
 	kling: {
-		apiKey: process.env.KLING_API_KEY || '',
+		// Kling authenticates with a short-lived JWT signed by an Access Key / Secret Key pair,
+		// not a static API key — see services/providers/kling.provider.js.
+		accessKey: process.env.KLING_ACCESS_KEY || '',
+		secretKey: process.env.KLING_SECRET_KEY || '',
 		baseUrl: process.env.KLING_API_BASE_URL || 'https://api.klingai.com',
 	},
 	creditCostPerSecond: Number(process.env.CREDIT_COST_PER_SECOND || 8),

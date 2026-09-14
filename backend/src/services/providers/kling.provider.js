@@ -1,32 +1,63 @@
 import axios from 'axios';
+import jwt from 'jsonwebtoken';
 import { config } from '../../config/index.js';
 
-// TODO: verify endpoint paths, auth header, and payload/response shape against Kling's current
-// API docs before going live — this follows their documented "create task, poll by task id" pattern
-// but exact field names may have shifted.
-const client = axios.create({
-	baseURL: config.kling.baseUrl,
-	headers: { Authorization: `Bearer ${config.kling.apiKey}` },
-});
+// Kling authenticates with a short-lived JWT (not a static bearer key): sign
+// { iss: accessKey, exp: now+30min, nbf: now-5s } with the secret key, HS256.
+// This pattern is corroborated by multiple independent Kling API integrations.
+// Cached and regenerated a minute before expiry so we don't sign on every request.
+let cachedToken = null;
+let cachedTokenExpiresAt = 0;
 
-export async function createGeneration({ prompt, imageUrl, durationSeconds, resolution }) {
-	const { data } = await client.post('/v1/videos/generations', {
-		prompt,
-		image_url: imageUrl || undefined,
-		duration: durationSeconds,
-		resolution,
+function getAuthToken() {
+	const now = Math.floor(Date.now() / 1000);
+	if (cachedToken && cachedTokenExpiresAt - now > 60) return cachedToken;
+
+	const expiresAt = now + 1800;
+	cachedToken = jwt.sign({ iss: config.kling.accessKey, exp: expiresAt, nbf: now - 5 }, config.kling.secretKey, {
+		algorithm: 'HS256',
 	});
-	return { providerJobId: data.task_id };
+	cachedTokenExpiresAt = expiresAt;
+	return cachedToken;
 }
 
-export async function getStatus(providerJobId) {
-	const { data } = await client.get(`/v1/videos/generations/${providerJobId}`);
+function client() {
+	return axios.create({
+		baseURL: config.kling.baseUrl,
+		headers: { Authorization: `Bearer ${getAuthToken()}` },
+	});
+}
 
-	if (data.task_status === 'succeed') {
-		return { status: 'completed', videoUrl: data.task_result?.videos?.[0]?.url };
+// TODO: verify field names and the response envelope against Kling's official Open Platform
+// docs once you have real credentials — third-party write-ups disagree on some details (e.g.
+// whether `duration` is a string or number, and the exact query-by-task-id path). The shape
+// below follows the most consistently corroborated pattern: POST creates a task and returns
+// { data: { task_id } }; GET polls the same resource type and returns
+// { data: { task_status, task_status_msg, task_result: { videos: [{ url }] } } }.
+export async function createGeneration({ prompt, imageUrl, durationSeconds, resolution }) {
+	const isImageToVideo = Boolean(imageUrl);
+	const path = isImageToVideo ? '/v1/videos/image2video' : '/v1/videos/text2video';
+
+	const { data } = await client().post(path, {
+		model: 'kling-v2-master',
+		prompt,
+		image_url: imageUrl || undefined,
+		duration: String(durationSeconds),
+		aspect_ratio: resolution === '1080p' ? '16:9' : '16:9',
+	});
+
+	return { providerJobId: data.data.task_id, taskType: isImageToVideo ? 'image2video' : 'text2video' };
+}
+
+export async function getStatus(providerJobId, taskType = 'text2video') {
+	const { data } = await client().get(`/v1/videos/${taskType}/${providerJobId}`);
+	const task = data.data;
+
+	if (task.task_status === 'succeed') {
+		return { status: 'completed', videoUrl: task.task_result?.videos?.[0]?.url };
 	}
-	if (data.task_status === 'failed') {
-		return { status: 'failed', error: data.task_status_msg || 'Kling generation failed' };
+	if (task.task_status === 'failed') {
+		return { status: 'failed', error: task.task_status_msg || 'Kling generation failed' };
 	}
 	return { status: 'processing' };
 }

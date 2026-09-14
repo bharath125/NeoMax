@@ -16,6 +16,7 @@ const jobSchema = new mongoose.Schema(
 			index: true,
 		},
 		providerJobId: { type: String },
+		providerTaskType: { type: String },
 		resultUrl: { type: String },
 		error: { type: String },
 
