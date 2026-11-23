@@ -2,10 +2,136 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
-	color-scheme: light;
+/* Theme palettes as space-separated RGB triplets (so Tailwind can add opacity). Dark is the default; the active
+   theme is set on <html data-theme="...">, and any element can opt into a theme with the same attribute (the video
+   player modal stays dark in light mode this way). Light must stay below dark: equal specificity, later wins. */
+:root,
+[data-theme='dark'] {
+	color-scheme: dark;
+	--c-ink-950: 7 7 13;
+	--c-ink-900: 12 12 21;
+	--c-ink-800: 19 19 31;
+	--c-ink-700: 27 27 43;
+	--c-white: 255 255 255;
+	--c-slate-100: 241 245 249;
+	--c-slate-200: 226 232 240;
+	--c-slate-300: 203 213 225;
+	--c-slate-400: 148 163 184;
+	--c-slate-500: 100 116 139;
+	--c-slate-600: 71 85 105;
+	--c-violet-200: 221 214 254;
+	--c-violet-300: 196 181 253;
+	--c-violet-400: 167 139 250;
+	--c-fuchsia-300: 240 171 252;
+	--c-fuchsia-400: 232 121 249;
+	--c-rose-200: 254 205 211;
+	--c-rose-300: 253 164 175;
+	--c-rose-400: 251 113 133;
+	--c-amber-200: 253 230 138;
+	--c-amber-300: 252 211 77;
+	--c-amber-400: 251 191 36;
+	--c-emerald-300: 110 231 183;
+	--c-emerald-400: 52 211 153;
+	--c-sky-400: 56 189 248;
 }
 
-body {
-	@apply bg-white text-gray-900;
+[data-theme='light'] {
+	color-scheme: light;
+	--c-ink-950: 246 247 251;
+	--c-ink-900: 238 240 247;
+	--c-ink-800: 255 255 255;
+	--c-ink-700: 226 230 240;
+	/* The foreground tint: text-white becomes near-black, bg-white/5 a faint dark wash. */
+	--c-white: 15 23 42;
+	--c-slate-100: 15 23 42;
+	--c-slate-200: 30 41 59;
+	--c-slate-300: 51 65 85;
+	--c-slate-400: 71 85 105;
+	--c-slate-500: 82 96 117;
+	--c-slate-600: 100 116 139;
+	/* Pale accent text shades would vanish on a light background, so they map to their dark counterparts. */
+	--c-violet-200: 91 33 182;
+	--c-violet-300: 109 40 217;
+	--c-violet-400: 124 58 237;
+	--c-fuchsia-300: 162 28 175;
+	--c-fuchsia-400: 192 38 211;
+	--c-rose-200: 159 18 57;
+	--c-rose-300: 190 18 60;
+	--c-rose-400: 225 29 72;
+	--c-amber-200: 146 64 14;
+	--c-amber-300: 180 83 9;
+	--c-amber-400: 217 119 6;
+	--c-emerald-300: 4 120 87;
+	--c-emerald-400: 5 150 105;
+	--c-sky-400: 2 132 199;
+}
+
+@layer base {
+	html {
+		scroll-behavior: smooth;
+	}
+
+	body {
+		@apply bg-ink-950 font-sans text-slate-100 antialiased;
+	}
+
+	::selection {
+		@apply bg-violet-500/40 text-snow;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		html {
+			scroll-behavior: auto;
+		}
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0.01ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: 0.01ms !important;
+		}
+	}
+}
+
+@layer components {
+	.btn {
+		@apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold transition
+			focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950
+			disabled:cursor-not-allowed disabled:opacity-50;
+	}
+
+	.btn-primary {
+		@apply btn bg-gradient-to-r from-violet-500 to-fuchsia-500 text-snow shadow-lg shadow-violet-500/25
+			hover:from-violet-400 hover:to-fuchsia-400 active:scale-[0.98];
+	}
+
+	.btn-ghost {
+		@apply btn border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10;
+	}
+
+	.input {
+		@apply w-full rounded-xl border border-white/10 bg-ink-800 px-4 py-3 text-sm text-slate-100 transition
+			placeholder:text-slate-500 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-400/30;
+	}
+
+	.card {
+		@apply rounded-2xl border border-white/10 bg-ink-800/70 backdrop-blur;
+	}
+
+	.label {
+		@apply mb-1.5 block text-sm font-medium text-slate-300;
+	}
+
+	.skeleton {
+		@apply animate-shimmer bg-[length:200%_100%] bg-gradient-to-r from-white/5 via-white/10 to-white/5;
+	}
+
+	.gradient-text {
+		@apply bg-gradient-to-r from-violet-400 via-fuchsia-400 to-sky-400 bg-clip-text text-transparent;
+	}
+}
+
+/* Cards have no dark backdrop to stand out against in light mode, so give them a soft lift. */
+[data-theme='light'] .card {
+	box-shadow: 0 1px 2px rgb(15 23 42 / 0.05), 0 6px 20px -8px rgb(15 23 42 / 0.1);
 }

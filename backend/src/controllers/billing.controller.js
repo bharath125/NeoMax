@@ -1,55 +1,102 @@
-import Stripe from 'stripe';
-import { config } from '../config/index.js';
-import { addCredits } from '../services/credits.service.js';
+import Joi from 'joi';
+import { Payment } from '../models/Payment.js';
+import { User } from '../models/User.js';
+import { getCreditPackages } from '../config/creditPackages.js';
+import { createOrder, fulfillOrder } from '../services/billing.service.js';
+import { getPaymentProvider } from '../services/payments/index.js';
+import { logger } from '../utils/logger.js';
 
-const stripe = new Stripe(config.stripe.secretKey);
+const createOrderSchema = Joi.object({ package: Joi.string().required() });
 
-// TODO: replace with real Stripe Price IDs created in the dashboard, one per credit package.
-const CREDIT_PACKAGES = {
-	small: { priceId: 'price_TODO_small', credits: 500 },
-	medium: { priceId: 'price_TODO_medium', credits: 2000 },
-	large: { priceId: 'price_TODO_large', credits: 6000 },
-};
+const verifySchema = Joi.object({
+	orderId: Joi.string().required(),
+	paymentId: Joi.string().required(),
+	signature: Joi.string().required(),
+});
 
-export async function createCheckoutSession(req, res, next) {
+export async function listPackages(req, res, next) {
 	try {
-		const packageKey = req.body.package;
-		const pkg = CREDIT_PACKAGES[packageKey];
-		if (!pkg) return res.status(400).json({ success: false, error: { message: 'Unknown credit package' } });
-
-		const session = await stripe.checkout.sessions.create({
-			mode: 'payment',
-			line_items: [{ price: pkg.priceId, quantity: 1 }],
-			success_url: `${config.frontendUrl}/billing?success=1`,
-			cancel_url: `${config.frontendUrl}/billing?canceled=1`,
-			client_reference_id: req.user._id.toString(),
-			metadata: { credits: String(pkg.credits) },
-		});
-
-		res.json({ success: true, data: { url: session.url } });
+		res.json({ success: true, data: { enabled: getPaymentProvider().isConfigured(), packages: getCreditPackages() } });
 	} catch (err) {
 		next(err);
 	}
 }
 
-// Mounted with express.raw() — do not put this route behind the global JSON body parser,
-// Stripe's signature verification needs the raw payload bytes.
-export async function handleWebhook(req, res) {
-	let event;
+export async function createOrderHandler(req, res, next) {
 	try {
-		event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], config.stripe.webhookSecret);
+		const { error, value } = createOrderSchema.validate(req.body);
+		if (error) return res.status(400).json({ success: false, error: { message: error.message } });
+
+		res.status(201).json({ success: true, data: await createOrder(req.user, value.package) });
 	} catch (err) {
-		return res.status(400).send(`Webhook signature verification failed: ${err.message}`);
+		next(err);
 	}
+}
 
-	if (event.type === 'checkout.session.completed') {
-		const session = event.data.object;
-		const userId = session.client_reference_id;
-		const credits = Number(session.metadata?.credits || 0);
-		if (userId && credits > 0) {
-			await addCredits(userId, credits);
+// Called by the browser right after Razorpay Checkout succeeds. The signature proves the payment belongs to
+// the order; the webhook below is the safety net if this call never arrives (closed tab, network drop).
+export async function verifyPayment(req, res, next) {
+	try {
+		const { error, value } = verifySchema.validate(req.body);
+		if (error) return res.status(400).json({ success: false, error: { message: error.message } });
+
+		const provider = getPaymentProvider();
+		if (!provider.verifyCheckoutSignature(value)) {
+			return res.status(400).json({ success: false, error: { message: 'Payment signature verification failed' } });
 		}
+
+		const { payment, granted, mismatch } = await fulfillOrder({
+			providerName: provider.name,
+			orderId: value.orderId,
+			paymentId: value.paymentId,
+			userId: req.user._id,
+		});
+		if (!payment) return res.status(404).json({ success: false, error: { message: 'Order not found' } });
+		if (mismatch) return res.status(409).json({ success: false, error: { message: 'Payment amount mismatch' } });
+
+		const user = await User.findById(req.user._id).select('credits');
+		res.json({ success: true, data: { creditsAdded: granted ? payment.credits : 0, credits: user.credits } });
+	} catch (err) {
+		next(err);
+	}
+}
+
+// Mounted with express.raw() in app.js — signature verification needs the exact bytes Razorpay sent.
+export async function handleWebhook(req, res) {
+	const provider = getPaymentProvider();
+	const signature = req.headers['x-razorpay-signature'];
+
+	if (!Buffer.isBuffer(req.body) || !provider.verifyWebhookSignature(req.body, signature)) {
+		return res.status(400).send('Invalid webhook signature');
 	}
 
-	res.json({ received: true });
+	try {
+		const event = provider.parseWebhookEvent(JSON.parse(req.body.toString('utf8')));
+		if (event?.type === 'payment_succeeded') {
+			await fulfillOrder({
+				providerName: provider.name,
+				orderId: event.orderId,
+				paymentId: event.paymentId,
+				amount: event.amount,
+				currency: event.currency,
+			});
+		}
+		res.json({ received: true });
+	} catch (err) {
+		// Non-2xx makes Razorpay retry later, which is what we want for transient failures.
+		logger.error(`Webhook processing failed: ${err.stack || err.message}`);
+		res.status(500).send('Webhook processing failed');
+	}
+}
+
+export async function listPayments(req, res, next) {
+	try {
+		const payments = await Payment.find({ user: req.user._id, status: 'paid' })
+			.sort({ paidAt: -1 })
+			.limit(20)
+			.select('packageKey credits amount currency paidAt');
+		res.json({ success: true, data: payments });
+	} catch (err) {
+		next(err);
+	}
 }

@@ -13,7 +13,7 @@ app.use(helmet());
 app.use(cors({ origin: config.frontendUrl }));
 app.use(morgan('dev'));
 
-// Stripe needs the raw body to verify the webhook signature, so this must be mounted
+// Razorpay needs the raw body to verify the webhook signature, so this must be mounted
 // before express.json() and outside the versioned api router.
 app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), handleWebhook);
 

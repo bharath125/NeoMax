@@ -1,4 +1,4 @@
-# ViewMax
+# NeoMax
 
 AI video-generation wrapper: users submit a prompt/image, the backend queues a job against a
 third-party video model (Kling first, others pluggable), stores the result, and meters usage via credits.

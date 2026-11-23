@@ -6,6 +6,7 @@ const creditTransactionSchema = new mongoose.Schema(
 		amount: { type: Number, required: true },
 		type: { type: String, enum: ['topup', 'reserve', 'refund'], required: true },
 		job: { type: mongoose.Schema.Types.ObjectId, ref: 'Job' },
+		payment: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment' },
 	},
 	{ timestamps: true },
 );

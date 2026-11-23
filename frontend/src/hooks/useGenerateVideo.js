@@ -8,6 +8,10 @@ export function useGenerateVideo() {
 			const { data } = await apiClient.post('/generate', payload);
 			return data.data;
 		},
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: ['jobs'] }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['jobs'] });
+			queryClient.invalidateQueries({ queryKey: ['scenes'] });
+			queryClient.invalidateQueries({ queryKey: ['me'] });
+		},
 	});
 }

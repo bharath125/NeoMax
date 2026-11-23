@@ -1,0 +1,17 @@
+# Keep the build context small and, above all, keep secrets and local state out of the image.
+**/node_modules
+**/dist
+**/build
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+.git
+.gitignore
+.DS_Store
+.claude
+README.md
+
+# The frontend is deployed to S3, not shipped in this image. Only its manifest is needed for `npm ci`.
+frontend/*
+!frontend/package.json

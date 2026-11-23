@@ -2,8 +2,13 @@ import { config } from '../config/index.js';
 import { User } from '../models/User.js';
 import { CreditTransaction } from '../models/CreditTransaction.js';
 
-export function estimateCost(durationSeconds) {
-	return Math.ceil(durationSeconds * config.creditCostPerSecond);
+// Reference-image jobs run on a pricier model, so they cost more per second.
+export function creditRate(referenceCount = 0) {
+	return referenceCount > 0 ? config.creditCostPerSecondReference : config.creditCostPerSecond;
+}
+
+export function estimateCost(durationSeconds, referenceCount = 0) {
+	return Math.ceil(durationSeconds * creditRate(referenceCount));
 }
 
 export class InsufficientCreditsError extends Error {
@@ -32,7 +37,7 @@ export async function refundCredits(userId, amount, jobId) {
 	await CreditTransaction.create({ user: userId, amount, type: 'refund', job: jobId });
 }
 
-export async function addCredits(userId, amount) {
+export async function addCredits(userId, amount, paymentId) {
 	await User.findByIdAndUpdate(userId, { $inc: { credits: amount } });
-	await CreditTransaction.create({ user: userId, amount, type: 'topup' });
+	await CreditTransaction.create({ user: userId, amount, type: 'topup', payment: paymentId });
 }

@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { config } from '../../config/index.js';
 
+export const supportsImageInputs = false;
+
 function client() {
 	return axios.create({
 		baseURL: config.kling.baseUrl,

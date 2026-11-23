@@ -5,10 +5,10 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
 	const [user, setUser] = useState(null);
-	const [token, setToken] = useState(() => localStorage.getItem('viewmax_token'));
+	const [token, setToken] = useState(() => localStorage.getItem('neomax_token'));
 
 	const persistSession = useCallback((data) => {
-		localStorage.setItem('viewmax_token', data.token);
+		localStorage.setItem('neomax_token', data.token);
 		setToken(data.token);
 		setUser(data.user);
 	}, []);
@@ -29,14 +29,22 @@ export function AuthProvider({ children }) {
 		[persistSession],
 	);
 
+	const loginWithGoogle = useCallback(
+		async (credential) => {
+			const { data } = await apiClient.post('/auth/google', { credential });
+			persistSession(data.data);
+		},
+		[persistSession],
+	);
+
 	const logout = useCallback(() => {
-		localStorage.removeItem('viewmax_token');
+		localStorage.removeItem('neomax_token');
 		setToken(null);
 		setUser(null);
 	}, []);
 
 	return (
-		<AuthContext.Provider value={{ user, token, login, register, logout }}>{children}</AuthContext.Provider>
+		<AuthContext.Provider value={{ user, token, login, register, loginWithGoogle, logout }}>{children}</AuthContext.Provider>
 	);
 }
 

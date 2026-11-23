@@ -1,0 +1,21 @@
+# Caddy is the public face of the API: it obtains and renews the HTTPS certificate automatically and proxies to the
+# API container. CloudFront forwards /api/* here (see the deployment notes), so only this domain needs to resolve.
+{
+	email {$ACME_EMAIL}
+}
+
+{$API_DOMAIN} {
+	encode zstd gzip
+
+	# Image uploads are capped at 10 MB by the API; leave a little headroom for the request envelope.
+	request_body {
+		max_size 12MB
+	}
+
+	reverse_proxy api:4000 {
+		# Scene export and image generation can take a while; don't cut the upstream off early.
+		transport http {
+			response_header_timeout 90s
+		}
+	}
+}

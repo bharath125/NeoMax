@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev:backend": "npm run dev --workspace backend",
 		"dev:worker": "npm run worker --workspace backend",
-		"dev:frontend": "npm run dev --workspace frontend"
+		"dev:frontend": "npm run dev --workspace frontend",
+		"deploy:frontend": "bash scripts/deploy-frontend.sh"
 	}
 }

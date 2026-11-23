@@ -1,14 +1,21 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { AuthLayout } from '../components/AuthLayout.jsx';
+import { PasswordField } from '../components/PasswordField.jsx';
+import { GoogleButton } from '../components/GoogleButton.jsx';
+import { Spinner } from '../components/Icon.jsx';
+import { apiErrorMessage } from '../lib/jobs.js';
 
 export function Register() {
-	const { register } = useAuth();
+	const { token, register, loginWithGoogle } = useAuth();
 	const navigate = useNavigate();
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [error, setError] = useState('');
 	const [submitting, setSubmitting] = useState(false);
+
+	if (token) return <Navigate to="/generate" replace />;
 
 	async function handleSubmit(e) {
 		e.preventDefault();
@@ -18,45 +25,71 @@ export function Register() {
 			await register(email, password);
 			navigate('/generate');
 		} catch (err) {
-			setError(err.response?.data?.error?.message || 'Registration failed');
+			setError(apiErrorMessage(err, 'Could not create your account. Please try again.'));
 		} finally {
 			setSubmitting(false);
 		}
 	}
 
+	async function handleGoogle(credential) {
+		setError('');
+		try {
+			await loginWithGoogle(credential);
+			navigate('/generate');
+		} catch (err) {
+			setError(apiErrorMessage(err, 'Google sign-in failed. Please try again.'));
+		}
+	}
+
 	return (
-		<div className="max-w-sm mx-auto mt-24 flex flex-col gap-4">
-			<h1 className="text-2xl font-semibold">Create your ViewMax account</h1>
-			<form onSubmit={handleSubmit} className="flex flex-col gap-3">
-				<input
-					type="email"
-					placeholder="Email"
-					value={email}
-					onChange={(e) => setEmail(e.target.value)}
-					className="border rounded-md px-3 py-2"
-					required
-				/>
-				<input
-					type="password"
-					placeholder="Password (min 8 characters)"
+		<AuthLayout
+			title="Create your account"
+			subtitle="Start with free credits — no card needed."
+			footer={
+				<>
+					Already have an account?{' '}
+					<Link to="/login" className="font-semibold text-violet-300 hover:text-violet-200">
+						Log in
+					</Link>
+				</>
+			}
+		>
+			<form onSubmit={handleSubmit} className="space-y-4">
+				<div>
+					<label htmlFor="email" className="label">
+						Email
+					</label>
+					<input
+						id="email"
+						type="email"
+						value={email}
+						onChange={(e) => setEmail(e.target.value)}
+						autoComplete="email"
+						placeholder="you@example.com"
+						required
+						className="input"
+					/>
+				</div>
+				<PasswordField
+					id="password"
+					label="Password"
 					value={password}
 					onChange={(e) => setPassword(e.target.value)}
-					className="border rounded-md px-3 py-2"
-					required
+					autoComplete="new-password"
 					minLength={8}
+					hint="At least 8 characters."
 				/>
-				{error && <p className="text-sm text-red-600">{error}</p>}
-				<button
-					type="submit"
-					disabled={submitting}
-					className="bg-black text-white rounded-md py-2 disabled:opacity-50"
-				>
-					{submitting ? 'Creating…' : 'Create account'}
+				{error && (
+					<p role="alert" className="rounded-lg border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+						{error}
+					</p>
+				)}
+				<button type="submit" disabled={submitting} className="btn-primary w-full">
+					{submitting && <Spinner className="h-4 w-4" />}
+					{submitting ? 'Creating account…' : 'Create account'}
 				</button>
 			</form>
-			<p className="text-sm text-gray-600">
-				Already have an account? <Link to="/login" className="underline">Log in</Link>
-			</p>
-		</div>
+			<GoogleButton onCredential={handleGoogle} onError={setError} />
+		</AuthLayout>
 	);
 }
